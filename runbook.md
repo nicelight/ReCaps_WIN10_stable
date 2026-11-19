@@ -7,7 +7,8 @@ Runbook: сборка Recaps Switcher
 2. Установленные Build Tools for Visual Studio 2026 **или** 2022 (подойдёт и Community-редакция).  
    В workload «Разработка классических приложений на C++» включите:
    - MSVC toolset (**v145** для 2026 или **v143** для 2022);
-   - Windows 10/11 SDK.
+   - Windows 10/11 SDK;
+   - для ARM64-сборки — компонент «MSVC … C++ ARM64 build tools».
    MFC не требуется: ресурсы используют `winres.h`, а не `afxres.h`.
 3. PowerShell или cmd с правами пользователя.
 
@@ -36,13 +37,15 @@ msbuild recaps.2010.vcxproj ^
 - prebuild-скрипт `build-release.wsf` отключён, поэтому версия не инкрементируется автоматически;
 - результат (`recaps.exe`) появится в `x64\Release\`;
 - для 32-битной сборки используйте `/p:Platform=Win32` (результат в `Win32\Release\`);
+- для Windows on ARM используйте `/p:Platform=ARM64` (результат в `ARM64\Release\`; нужен ARM64-компилятор из состава MSVC);
 - локализация: строки — в `resource.rc` и `lang_ru.rc2`, выбор языка — `localization.cpp`.
 
 ## CI и релизы
 
-`.github/workflows/release.yml` собирает x64 и Win32 на каждый push/PR.
+`.github/workflows/release.yml` собирает x64, Win32 и ARM64 на каждый push/PR.
 При пуше тега вида `v*` создаётся GitHub Release с архивами
-`recaps-x64.zip` и `recaps-Win32.zip` (внутри — `recaps.exe`, `help`, `flags`).
+`recaps-x64.zip`, `recaps-Win32.zip` и `recaps-ARM64.zip`
+(внутри — `recaps.exe`, `help`, `flags`).
 
 ## Типичные ошибки
 
