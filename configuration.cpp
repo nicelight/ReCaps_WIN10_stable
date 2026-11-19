@@ -143,11 +143,13 @@ static BOOL OnInitShortCutDialog(HWND hwnd, HWND hwndFocus, LPARAM lParam)
 	SendMessage(hwnd, WM_SETICON, ICON_SMALL, (LPARAM)g_hHKIcon);
 
 	const HotkeyDialogInit* lpInit = (const HotkeyDialogInit*)lParam;
+	if (NULL == lpInit)
+		return FALSE;
 
-	if (NULL != lpInit && NULL != lpInit->szCaption)
+	if (NULL != lpInit->szCaption)
 		SetWindowText(hwnd, lpInit->szCaption);
 
-	if (NULL != lpInit && NULL != lpInit->szDisableCaption)
+	if (NULL != lpInit->szDisableCaption)
 		SetWindowText(GetDlgItem(hwnd, IDC_DISABLE), lpInit->szDisableCaption);
 
 	st_uhkCustHotkeyOrg = 
@@ -262,9 +264,12 @@ static void OnShortCutTimer(HWND hwnd, UINT id)
 }
 
 
-static void OnShortCutClose(HWND hwnd)
+static void OnShortCutDestroy(HWND hwnd)
 {
-	DeleteObject(st_hbrBack);
+	if (NULL != st_hbrBack) {
+		DeleteObject(st_hbrBack);
+		st_hbrBack = NULL;
+	}
 	KillTimer(hwnd, 1);
 }
 
@@ -298,7 +303,7 @@ static INT_PTR __stdcall ShortCutDialogProc(HWND hDlg, UINT message,
 		HANDLE_MSG(hDlg, WM_INITDIALOG, OnInitShortCutDialog);
 		HANDLE_MSG(hDlg, WM_COMMAND, OnShortCutCommand);
 		HANDLE_MSG(hDlg, WM_TIMER, OnShortCutTimer);
-		HANDLE_MSG(hDlg, WM_CLOSE, OnShortCutClose);
+		HANDLE_MSG(hDlg, WM_DESTROY, OnShortCutDestroy);
 		HANDLE_MSG(hDlg, WM_CTLCOLORSTATIC, OnShortCutColorStatic);
 		default: break;
 	}
@@ -900,6 +905,8 @@ static BOOL InitLanguagesList(HWND hwnd)
 	}
 
 	SubclassListViewHeader(hWndList, IDC_LIST_LANGUAGES);
+
+	return TRUE;
 }
 
 
@@ -928,9 +935,13 @@ static BOOL InitGroupsList(HWND hwnd)
 	if (ListView_InsertColumn(hWndList, 0, &lvc) == -1)
 		return FALSE;
 
-	int nWidth = (440 - cnGroupsColumnWidth) / g_keyboardInfo.size();
-	if (nWidth < 50)
-		nWidth = 50;
+	int nWidth = 50;
+	if (!g_keyboardInfo.empty()) {
+		nWidth = (440 - cnGroupsColumnWidth)
+				/ static_cast<int>(g_keyboardInfo.size());
+		if (nWidth < 50)
+			nWidth = 50;
+	}
 
 	for (std::map<HKL, KeyboardLayoutInfo>::iterator i = g_keyboardInfo.begin();
 			i != g_keyboardInfo.end(); i++) {
@@ -1055,10 +1066,14 @@ static void ReposControls(HWND hwnd,
 	// groups
 	int nLabelWidth = ApplyFontScaling(cnGroupsColumnWidth);
 	ListView_SetColumnWidth(st_aControls[eGroupsList].hwnd, 0, nLabelWidth);
-	int nColWidth = (nWidth - nLabelWidth) / g_keyboardInfo.size();
-	if (nColWidth < 50)
-		nColWidth = 50;
-	for (int i = 0; i < g_keyboardInfo.size(); i++)
+	int nColWidth = 50;
+	if (!g_keyboardInfo.empty()) {
+		nColWidth = (nWidth - nLabelWidth)
+				/ static_cast<int>(g_keyboardInfo.size());
+		if (nColWidth < 50)
+			nColWidth = 50;
+	}
+	for (int i = 0; i < static_cast<int>(g_keyboardInfo.size()); i++)
 		ListView_SetColumnWidth(st_aControls[eGroupsList].hwnd, 1 + i, nColWidth);
 }
 
@@ -1069,7 +1084,13 @@ static BOOL OnInitConfigureDialog(HWND hwnd, HWND hwndFocus, LPARAM lParam)
 
 	SendMessage(hwnd, WM_SETICON, ICON_SMALL, (LPARAM)g_hIcon);
 
-	st_hImageList16 = ImageList_Create(16, 16, ILC_MASK, g_keyboardInfo.size(), 0);
+	if (NULL != st_hImageList16) {
+		ImageList_Destroy(st_hImageList16);
+		st_hImageList16 = NULL;
+	}
+
+	st_hImageList16 = ImageList_Create(16, 16, ILC_MASK,
+			static_cast<int>(g_keyboardInfo.size()), 0);
 	for (std::map<HKL, KeyboardLayoutInfo>::iterator i = g_keyboardInfo.begin();
 			i != g_keyboardInfo.end(); i++)
 		ImageList_AddIcon(st_hImageList16,
@@ -1518,7 +1539,11 @@ static LRESULT OnLanguagesHotTrack(HWND hwnd, NMHDR* pnmhdr)
 		ListView_GetItem(pnmhdr->hwndFrom, &lvi);
 
 		HKL hkl = (HKL)(lvi.lParam);
-		bool bSetCursor = g_keyboardInfo[hkl].inUse;
+		std::map<HKL, KeyboardLayoutInfo>::iterator i_kb
+				= g_keyboardInfo.find(hkl);
+		if (i_kb == g_keyboardInfo.end())
+			return 0;
+		bool bSetCursor = i_kb->second.inUse;
 
 		switch (lvhti.iSubItem) {
 		case 0: // Active
@@ -1939,7 +1964,13 @@ static void OnConfigureOwnerDrawGroups(HWND hwnd, const DRAWITEMSTRUCT *lpDrawIt
 		if (0 == lpDrawItem->itemData)
 			break; // add new group item - no flag icons
 
+		if (i_hk == g_hotkeyInfo.end())
+			break;
+
 		int index = nColumn - 1;
+		if (index < 0 || index >= static_cast<int>(g_keyboardInfo.size()))
+			break;
+
 		std::map<HKL, KeyboardLayoutInfo>::iterator
 					i_kb = g_keyboardInfo.begin();
 		std::advance(i_kb, index);
@@ -2192,19 +2223,22 @@ int RunConfiguration(HWND hParentWnd)
 
 bool LoadExternalIcon(HICON* phIcon, LPCTSTR lpszName)
 {
+	if (NULL == phIcon)
+		return false;
+
 	OPENFILENAME ofn = { 0 };
 	TCHAR szPath[MAX_PATH] = { 0 };
+	TCHAR szFile[MAX_PATH] = { 0 };
 	TCHAR szDrive[_MAX_DRIVE] = { 0 };
 	TCHAR szDir[_MAX_DIR] = { 0 };
 	GetModuleFileName(g_hInstance, szPath, _countof(szPath));
 	_tsplitpath(szPath, szDrive, szDir, NULL, NULL);
 	_tmakepath(szPath, szDrive, szDir, _T("flags"), NULL);
-	szDir[0] = '\0';
 
 	ofn.lStructSize = sizeof(ofn);
 	ofn.hwndOwner = g_hwndMessageWindow;
-	ofn.lpstrFile = szDir;
-	ofn.nMaxFile = MAX_PATH;
+	ofn.lpstrFile = szFile;
+	ofn.nMaxFile = _countof(szFile);
 	ofn.lpstrFilter = _T("Icons\0*.ico\0");
 	ofn.nFilterIndex = 0;
 	ofn.lpstrFileTitle = NULL;
@@ -2218,8 +2252,12 @@ bool LoadExternalIcon(HICON* phIcon, LPCTSTR lpszName)
 
 	if (TRUE == GetOpenFileName(&ofn)) {
 		HICON hIcon = (HICON)LoadImage(NULL,
-			ofn.lpstrFile, IMAGE_ICON, 32, 32, LR_LOADFROMFILE);
-		DestroyIcon(*phIcon);
+			szFile, IMAGE_ICON, 32, 32, LR_LOADFROMFILE);
+		if (NULL == hIcon)
+			return false;
+
+		if (NULL != *phIcon)
+			DestroyIcon(*phIcon);
 		*phIcon = hIcon;
 		return true;
 	}

@@ -52,7 +52,14 @@ BOOL GrayScale(HBITMAP hBmp)
 	BOOL bRet = FALSE;
 	if (hBmp != NULL) {
 		BITMAP bp;
-		GetObject(hBmp, sizeof(BITMAP), &bp);  // bp was misspelled pb.
+		if (sizeof(BITMAP) != GetObject(hBmp, sizeof(BITMAP), &bp))
+			return FALSE;
+
+		// icons used by the application are small; do not alloca() for
+		// arbitrary bitmap sizes read from external data
+		if (bp.bmWidth <= 0 || bp.bmHeight <= 0
+				|| bp.bmWidth > 256 || bp.bmHeight > 256)
+			return FALSE;
 
 		long dwCount = bp.bmWidth * bp.bmHeight;
 		int nBitSize = sizeof(RGBQUAD) * dwCount;
@@ -413,6 +420,10 @@ HICON CreateGrayIcon(HICON hIcon)
 	BITMAP bmp = { 0 };
 	GetObject(iconInfo.hbmColor, sizeof(bmp), &bmp);
 
+	// hbmColor is a private copy made by GetIconInfo; only its size is needed
+	if (NULL != iconInfo.hbmColor)
+		DeleteObject(iconInfo.hbmColor);
+
 	HDC hWindowDC = GetWindowDC(g_hwndMessageWindow);
 	HDC hDC = CreateCompatibleDC(hWindowDC);
 	HBITMAP hBitmap = CreateCompatibleBitmap(hWindowDC, bmp.bmWidth, bmp.bmHeight);
@@ -565,7 +576,7 @@ static void SaveHotkeys(
 			std::basic_string<TCHAR> desc;
 			ExpandHotkeyName(desc, i->first);
 			RegSetValueEx(hkey, NULL, 0, REG_SZ,
-				(CONST BYTE*)desc.c_str(), DWORD(sizeof(TCHAR) * wcslen(desc.c_str()) + 1));
+				(CONST BYTE*)desc.c_str(), DWORD((wcslen(desc.c_str()) + 1) * sizeof(TCHAR)));
 
 			int idx = 0;
 			for (std::map<HKL, UHK>::const_iterator j = i->second.begin();
@@ -651,7 +662,7 @@ void SaveConfiguration(const std::map<HKL, KeyboardLayoutInfo>& info)
 					0, REG_DWORD, (CONST BYTE*)(&data), sizeof(DWORD));
 
 			RegSetValueEx(hkey, NULL, 0, REG_SZ,
-				(CONST BYTE*)i->second.name.c_str(), DWORD(sizeof(TCHAR) * wcslen(i->second.name.c_str()) + 1));
+				(CONST BYTE*)i->second.name.c_str(), DWORD((wcslen(i->second.name.c_str()) + 1) * sizeof(TCHAR)));
 
 			if (NULL != i->second.iconColor)
 				RegSaveIconData(hkey, i->second.iconColor);

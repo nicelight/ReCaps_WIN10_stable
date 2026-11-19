@@ -49,6 +49,8 @@ typedef struct {
 
 // Tray icon constants
 #define APPWM_TRAYICON       WM_APP
+// hotkey actions are executed by the message loop, not inside the hook
+#define APPWM_PROCESS_HOTKEY (WM_APP + 1)
 
 // General constants
 #define MUTEX L"recaps-D3E743A3-E0F9-47f5-956A-CD15C6548789"
@@ -146,6 +148,11 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 		return 1;
 	}
 
+	// register common controls used by the settings dialog (list views)
+	INITCOMMONCONTROLSEX icc = { sizeof(icc),
+			ICC_LISTVIEW_CLASSES | ICC_STANDARD_CLASSES };
+	InitCommonControlsEx(&icc);
+
 	// Create a fake window to listen to events
 	WNDCLASSEX wclx = {0};
 	wclx.cbSize         = sizeof( wclx );
@@ -207,7 +214,7 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 	st_bInjectThreadStop = true;
 	if (NULL != st_hInjectEvent)
 		SetEvent(st_hInjectEvent);
-	if (INVALID_HANDLE_VALUE != st_threadInject) {
+	if (NULL != st_threadInject && INVALID_HANDLE_VALUE != st_threadInject) {
 		WaitForSingleObject(st_threadInject, 1000);
 		CloseHandle(st_threadInject);
 	}
@@ -219,7 +226,7 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
 	for (int i = 0; i < g_hwndOverlayWindows.size(); i++)
 		DestroyWindow(g_hwndOverlayWindows[i]);
-	g_hwndOverlayWindows.clear(),
+	g_hwndOverlayWindows.clear();
 
 	DestroyWindow(g_hwndMessageWindow);
 	g_hwndMessageWindow = NULL;
@@ -259,6 +266,10 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 		case APPWM_TRAYICON:
 			return OnTrayIcon(hWnd, wParam, lParam);
 
+		case APPWM_PROCESS_HOTKEY:
+			ProcessHotkey(UHK(static_cast<unsigned long>(wParam)));
+			return 0;
+
 		case WM_COMMAND:
 			return OnCommand(hWnd, LOWORD(wParam), (HWND)lParam);
 
@@ -282,37 +293,38 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 void CALLBACK TimerProc(HWND hWnd, UINT, UINT_PTR, DWORD)
 {
 	HWND hwndFocus = RemoteGetFocus();
+	if (NULL != hwndFocus) {
+		HKL hklCurrent = GetKeyboardLayout(
+			GetWindowThreadProcessId(hwndFocus, NULL));
 
-	HKL hklCurrent = GetKeyboardLayout(
-		GetWindowThreadProcessId(hwndFocus, NULL));
+		bool bUpdateOverlayIcon = false;
+		if (hklCurrent != st_hklCurrent) {
+			HICON hIconLocal = NULL;
+			std::basic_string<TCHAR> nameLocal;
+			bool useLedLocal = false;
+			{
+				LayoutsGuard guard;
+				for (std::map<HKL, KeyboardLayoutInfo>::iterator i = g_keyboardInfo.begin();
+					i != g_keyboardInfo.end(); i++)
+					if (i->first == hklCurrent) {
+						useLedLocal = !!i->second.useLED;
+						hIconLocal = i->second.showIcon ? i->second.iconColor : NULL;
+						nameLocal = i->second.name;
+						break;
+					}
+			}
+			if (!nameLocal.empty()) {
+				SetScrollLockLED(useLedLocal);
+				st_hCurIcon = hIconLocal;
+				ModifyTrayIcon(hWnd, 0, hIconLocal, nameLocal.c_str());
+				//bUpdateOverlayIcon = true; // i->second.showIcon;
+				ShowFadeOffIcon(NULL != st_hCurIcon /* ? st_hwndFocusCurrent : NULL*/);
+			}
 
-	bool bUpdateOverlayIcon = false;
-	if (hklCurrent != st_hklCurrent) {
-		HICON hIconLocal = NULL;
-		std::basic_string<TCHAR> nameLocal;
-		bool useLedLocal = false;
-		{
-			LayoutsGuard guard;
-			for (std::map<HKL, KeyboardLayoutInfo>::iterator i = g_keyboardInfo.begin();
-				i != g_keyboardInfo.end(); i++)
-				if (i->first == hklCurrent) {
-					useLedLocal = !!i->second.useLED;
-					hIconLocal = i->second.showIcon ? i->second.iconColor : NULL;
-					nameLocal = i->second.name;
-					break;
-				}
+			PrintDebugString("%p -> %p", (void*)st_hklCurrent, (void*)hklCurrent);
+
+			st_hklCurrent = hklCurrent;
 		}
-		if (!nameLocal.empty()) {
-			SetScrollLockLED(useLedLocal);
-			st_hCurIcon = hIconLocal;
-			ModifyTrayIcon(hWnd, 0, hIconLocal, nameLocal.c_str());
-			//bUpdateOverlayIcon = true; // i->second.showIcon;
-			ShowFadeOffIcon(NULL != st_hCurIcon /* ? st_hwndFocusCurrent : NULL*/);
-		}
-
-		PrintDebugString("%08X -> %08X", st_hklCurrent, hklCurrent);
-
-		st_hklCurrent = hklCurrent;
 	}
 
 /*	if (st_hwndFocusCurrent != hwndFocus) {
@@ -323,7 +335,7 @@ void CALLBACK TimerProc(HWND hWnd, UINT, UINT_PTR, DWORD)
 	} */
 
 //	if (bUpdateOverlayIcon)
-	//	ShowFadeOffIcon(NULL != st_hCurIcon /* ? st_hwndFocusCurrent : NULL*/);
+		//	ShowFadeOffIcon(NULL != st_hCurIcon /* ? st_hwndFocusCurrent : NULL*/);
 
 	if (WAIT_OBJECT_0 == WaitForSingleObject(st_hRegChangeEvent, 0)) {
 		OnRegChangeNotify();
@@ -381,9 +393,15 @@ static bool SetupRegChangeNotify(bool bReset)
 		st_hRegChangeEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
 		if (NULL == st_hRegChangeEvent)
 			return false;
+	} else if (NULL != st_hRegChangeEvent) {
+		// the notify event is manual-reset and must be reset before re-arming
+		ResetEvent(st_hRegChangeEvent);
 	}
 
-	return ERROR_SUCCESS != RegNotifyChangeKeyValue(
+	if (NULL == st_hRegChangeEvent || NULL == st_hLocalesListKey)
+		return false;
+
+	return ERROR_SUCCESS == RegNotifyChangeKeyValue(
 			st_hLocalesListKey, TRUE, REG_NOTIFY_CHANGE_LAST_SET, st_hRegChangeEvent, TRUE);
 }
 
@@ -534,30 +552,44 @@ static bool GetKeyboardLayoutName(HKL hkl, std::basic_string<TCHAR>& name)
 void GetKeyboardLayouts(std::map<HKL, KeyboardLayoutInfo>& info)
 {
 	int count = GetKeyboardLayoutList(0, NULL);
+	if (count <= 0)
+		return;
+
 	std::vector<HKL> hkls(count);
-	GetKeyboardLayoutList(count, &hkls[0]);
+	int loaded = GetKeyboardLayoutList(count, &hkls[0]);
+	if (loaded <= 0)
+		return;
 
 	LayoutsGuard guard;
-	for (UINT i = 0; i < count; i++) {
+	for (int i = 0; i < loaded; i++) {
 		UINT_PTR hklValue = reinterpret_cast<UINT_PTR>(hkls[i]);
 		LANGID language = static_cast<LANGID>(hklValue & 0x0000FFFF); // bottom 16 bits
 		LCID locale = MAKELCID(language, SORT_DEFAULT);
-		int len = GetLocaleInfo(locale, LOCALE_SENGLANGUAGE, NULL, 0);
-		std::basic_string<TCHAR> abbrName(len, 0);
-		GetLocaleInfo(locale, LOCALE_SENGLANGUAGE, &abbrName[0], len);
-		abbrName.resize(len - 1);
 
-		std::basic_string<TCHAR> layoutName(len, 0);
+		std::basic_string<TCHAR> abbrName;
+		int len = GetLocaleInfo(locale, LOCALE_SENGLANGUAGE, NULL, 0);
+		if (len > 0) {
+			abbrName.resize(len);
+			GetLocaleInfo(locale, LOCALE_SENGLANGUAGE, &abbrName[0], len);
+			abbrName.resize(len - 1);
+		}
+
+		std::basic_string<TCHAR> layoutName;
 		GetKeyboardLayoutName(hkls[i], layoutName);
 
+		std::basic_string<TCHAR> localeName;
 		len = GetLocaleInfo(locale, LOCALE_SENGLISHDISPLAYNAME, NULL, 0);
-		std::basic_string<TCHAR> localeName(len, 0);
-		GetLocaleInfo(locale, LOCALE_SENGLISHDISPLAYNAME, &localeName[0], len);
-		localeName.resize(len - 1);
-		localeName += _T(" [ ");
-		localeName += layoutName;
-		localeName += _T(" ] ");
-		g_keyboardInfo[hkls[i]] = KeyboardLayoutInfo(static_cast<int>(i), localeName.c_str(), abbrName.c_str());
+		if (len > 0) {
+			localeName.resize(len);
+			GetLocaleInfo(locale, LOCALE_SENGLISHDISPLAYNAME, &localeName[0], len);
+			localeName.resize(len - 1);
+			localeName += _T(" [ ");
+			localeName += layoutName;
+			localeName += _T(" ] ");
+		} else
+			localeName = layoutName;
+
+		g_keyboardInfo[hkls[i]] = KeyboardLayoutInfo(i, localeName.c_str(), abbrName.c_str());
 	}
 }
 
@@ -565,14 +597,19 @@ void GetKeyboardLayouts(std::map<HKL, KeyboardLayoutInfo>& info)
 bool OnRegChangeNotify()
 {
 	int count = GetKeyboardLayoutList(0, NULL);
+	if (count <= 0)
+		return false;
+
 	std::vector<HKL> hkls(count);
-	GetKeyboardLayoutList(count, &hkls[0]);
+	int loaded = GetKeyboardLayoutList(count, &hkls[0]);
+	if (loaded <= 0)
+		return false;
 
 	bool bOk = false;
 	{
 		LayoutsGuard guard;
-		bOk = count == g_keyboardInfo.size();
-		for (int i = 0; bOk && i < count; i++)
+		bOk = loaded == static_cast<int>(g_keyboardInfo.size());
+		for (int i = 0; bOk && i < loaded; i++)
 			bOk = g_keyboardInfo.find(hkls[i]) != g_keyboardInfo.end();
 
 		if (!bOk) {
@@ -663,9 +700,15 @@ static void SwitchKeyboardLayout(HWND hwnd, HKL hklSource, HKL hklTarget)
 	static HANDLE st_uThreadId = 0;
 
 	if (NULL != hklSource) {
-		DWORD dwExitCode = -1;
-		if (!GetExitCodeThread(st_uThreadId, &dwExitCode)
-				|| STILL_ACTIVE != dwExitCode) {
+		DWORD dwExitCode = STILL_ACTIVE;
+		if (NULL != st_uThreadId
+				&& (!GetExitCodeThread(st_uThreadId, &dwExitCode)
+						|| STILL_ACTIVE != dwExitCode)) {
+			CloseHandle(st_uThreadId);
+			st_uThreadId = NULL;
+		}
+
+		if (NULL == st_uThreadId) {
 		  static HKL hkls[2] = { hklSource, hklTarget };
 		  hkls[0] = hklSource;
 		  hkls[1] = hklTarget;
@@ -673,6 +716,8 @@ static void SwitchKeyboardLayout(HWND hwnd, HKL hklSource, HKL hklTarget)
 			// since it simulates keystrokes to copy and paste the teset
 			// which call back into this hook. That isn't good..
 			st_uThreadId = (HANDLE)_beginthread(SwitchAndConvertThread, 0, hkls);
+			if ((HANDLE)(INT_PTR)(-1) == st_uThreadId)
+				st_uThreadId = NULL;
 		} else
 			MessageBeep(MB_ICONERROR);
 	}
@@ -709,10 +754,37 @@ static HKL EjectCD()
 }
 
 
+static HKL FindNextInUseLayout(HKL hklCurrent)
+{
+	if (g_keyboardInfo.empty())
+		return NULL;
+
+	std::map<HKL, KeyboardLayoutInfo>::iterator i
+			= g_keyboardInfo.find(hklCurrent);
+	if (i == g_keyboardInfo.end())
+		i = g_keyboardInfo.begin();
+	else if (++i == g_keyboardInfo.end())
+		i = g_keyboardInfo.begin();
+
+	std::map<HKL, KeyboardLayoutInfo>::iterator iStart = i;
+	do {
+		if (i->second.inUse)
+			return i->first;
+		if (++i == g_keyboardInfo.end())
+			i = g_keyboardInfo.begin();
+	} while (i != iStart);
+
+	return NULL;
+}
+
+
 static void ProcessHotkey(UHK uhkHotkey)
 {
 	HWND hwnd = NULL; // RemoteGetFocus();
 	HKL currentLayout = GetCurrentLayout(&hwnd);
+	if (NULL == hwnd)
+		return; // focus disappeared before the queued action was processed
+
 	UHK uhkCurrentGroup = g_uhkCurrentGroup;
 	LayoutsGuard guard;
 
@@ -743,24 +815,20 @@ static void ProcessHotkey(UHK uhkHotkey)
 			}
 
 			// iterate all layouts
-			std::map<HKL, KeyboardLayoutInfo>::iterator	i = i_current;
-			for (i++ ; i != i_current; i++) {
-				if (i == g_keyboardInfo.end())
-					i = g_keyboardInfo.begin();
-				if (i->second.inUse)
-					break;
-			}
-
-			SwitchKeyboardLayout(hwnd, hklSource, i->first);
+			HKL hklNext = FindNextInUseLayout(currentLayout);
+			if (NULL != hklNext)
+				SwitchKeyboardLayout(hwnd, hklSource, hklNext);
 			break;
 		}
 		//} else 	if (i_hotkey->first.bRemapHK) {
 		case eHKTRemap:
-			st_uhkInject = i_hotkey->second.begin()->second;
-//			st_uhkInject.bRemapHK = 1;
-			st_uhkInject.btHKType = eHKTRemap;
-			if (NULL != st_hInjectEvent)
-				SetEvent(st_hInjectEvent);
+			if (!i_hotkey->second.empty()) {
+				st_uhkInject = i_hotkey->second.begin()->second;
+//				st_uhkInject.bRemapHK = 1;
+				st_uhkInject.btHKType = eHKTRemap;
+				if (NULL != st_hInjectEvent)
+					SetEvent(st_hInjectEvent);
+			}
 			break;
 		//}	else 	if (i_hotkey->first.bEjectHK)
 		case eHKTEject:
@@ -778,6 +846,9 @@ static void ProcessHotkey(UHK uhkHotkey)
 	uhkCurrentGroup = uhkHotkey;
 
 skip_to_group_hotkey:
+
+	if (i_current == g_keyboardInfo.end())
+		return;
 
 	std::map<HKL, UHK>::iterator i_c = i_hotkey->second.find(i_current->first);
 
@@ -829,6 +900,9 @@ void SwitchAndConvertThread(void* lParam)
 
 unsigned __stdcall InjectInputThread(void*)
 {
+	if (NULL == st_hInjectEvent)
+		return 0;
+
 	do {
 		int count = 0;
 		INPUT input[(8 + 1) * 4] = { 0 };
@@ -1037,13 +1111,22 @@ LRESULT CALLBACK LowLevelHookProc(int nCode, WPARAM wParam, LPARAM lParam)
 
 	// Handle CapsLock - only switch current layout
 	if (change /*&& !st_dwHotkeyUp*/ /*&& !ctrl*/) {
-		ProcessHotkey(uhkHotkey);
+		// never do slow work (registry, Shell_NotifyIcon, CD eject, input
+		// injection) inside a low-level hook: Windows may remove hooks that
+		// exceed LowLevelHooksTimeout. Let the message loop handle the action.
+		if (!PostMessage(g_hwndMessageWindow, APPWM_PROCESS_HOTKEY,
+				(WPARAM)uhkHotkey.ulHotKey, 0))
+			ProcessHotkey(uhkHotkey);
 		return 1;
 	}
 
 	if (0 == g_dwModifiers && 0 != st_uhkHotkeyUp.ulKey) {
-		ProcessHotkey(st_uhkHotkeyUp);
+		UHK uhkHotkeyUp = st_uhkHotkeyUp;
 		st_uhkHotkeyUp.ulKey = 0;
+
+		if (!PostMessage(g_hwndMessageWindow, APPWM_PROCESS_HOTKEY,
+				(WPARAM)uhkHotkeyUp.ulHotKey, 0))
+			ProcessHotkey(uhkHotkeyUp);
 		goto skip_to_next_hook; // return 1;
 	}
 
