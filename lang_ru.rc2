@@ -1,0 +1,133 @@
+﻿#pragma code_page(65001)
+
+LANGUAGE LANG_RUSSIAN, SUBLANG_RUSSIAN_RUSSIA
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Russian localized dialogs
+//
+
+IDD_OVERLAY_HINT_DIALOG DIALOGEX 0, 0, 176, 94
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Настройки подсказки"
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
+BEGIN
+    LTEXT           "Затухание:",IDC_STATIC,30,9,54,8
+    EDITTEXT        IDC_FADEOFF_TIME_EDIT,90,8,35,14,ES_CENTER | ES_AUTOHSCROLL | ES_READONLY | ES_NUMBER
+    CONTROL         "",IDC_FADEOFF_TIME_SPIN,"msctls_updown32",UDS_SETBUDDYINT | UDS_ALIGNRIGHT | UDS_AUTOBUDDY | UDS_ARROWKEYS | UDS_NOTHOUSANDS | UDS_HOTTRACK,120,8,10,14
+    GROUPBOX        "Прозрачность (%):",IDC_STATIC,7,28,161,36
+    RTEXT           "От:",IDC_STATIC,28,44,22,8
+    EDITTEXT        IDC_GRADIENT_START_EDIT,56,42,35,14,ES_CENTER | ES_AUTOHSCROLL | ES_READONLY | ES_NUMBER
+    CONTROL         "",IDC_GRADIENT_START_SPIN,"msctls_updown32",UDS_SETBUDDYINT | UDS_ALIGNRIGHT | UDS_AUTOBUDDY | UDS_ARROWKEYS | UDS_NOTHOUSANDS | UDS_HOTTRACK,85,42,11,14
+    RTEXT           "До:",IDC_STATIC,93,44,25,8
+    EDITTEXT        IDC_GRADIENT_FINISH_EDIT,123,42,35,14,ES_CENTER | ES_AUTOHSCROLL | ES_READONLY | ES_NUMBER
+    CONTROL         "",IDC_GRADIENT_FINISH_SPIN,"msctls_updown32",UDS_SETBUDDYINT | UDS_ALIGNRIGHT | UDS_AUTOBUDDY | UDS_ARROWKEYS | UDS_NOTHOUSANDS | UDS_HOTTRACK,150,42,11,14
+    DEFPUSHBUTTON   "Закрыть",IDOK,96,73,61,14
+    PUSHBUTTON      "Тест",IDC_TEST_BUTTON,19,73,61,14
+END
+
+IDD_SELECT_HOTKEY_DIALOG DIALOGEX 0, 0, 294, 102
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Выбор комбинации"
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
+BEGIN
+    CTEXT           "Сочетание клавиш для смены раскладки:",IDC_STATIC,27,7,182,18
+    CTEXT           "Shift",IDC_LEFT_SHIFT_STATIC,7,33,36,13,SS_CENTERIMAGE | SS_SUNKEN
+    CTEXT           "Ctrl",IDC_LEFT_CONTROL_STATIC,7,51,36,13,SS_CENTERIMAGE | SS_SUNKEN
+    CTEXT           "Win",IDC_LEFT_WIN_STATIC,47,51,33,13,SS_CENTERIMAGE | SS_SUNKEN
+    CTEXT           "Alt",IDC_LEFT_ALT_STATIC,84,51,33,13,SS_CENTERIMAGE | SS_SUNKEN
+    CTEXT           "Alt",IDC_RIGHT_ALT_STATIC,140,51,33,13,SS_CENTERIMAGE | SS_SUNKEN
+    CTEXT           "Win",IDC_RIGHT_WIN_STATIC,177,51,33,13,SS_CENTERIMAGE | SS_SUNKEN
+    CTEXT           "Ctrl",IDC_RIGHT_CONTROL_STATIC,251,51,36,13,SS_CENTERIMAGE | SS_SUNKEN
+    CTEXT           "Shift",IDC_RIGHT_SHIFT_STATIC,251,33,36,13,SS_CENTERIMAGE | SS_SUNKEN
+    CTEXT           "L.Shift + L.Ctrl + L.Win + L.Alt + H",IDC_HOTKEY_STATIC,48,33,199,13,SS_CENTERIMAGE | SS_SUNKEN
+    CONTROL         "",IDC_STATIC,"Static",SS_ETCHEDHORZ,8,73,268,1
+    PUSHBUTTON      "Отмена",IDCANCEL,104,81,75,14
+    PUSHBUTTON      "Применить",IDOK,193,81,75,14
+    PUSHBUTTON      "Отключить",IDC_DISABLE,15,81,75,14
+    CTEXT           "Меню",IDC_MENU_STATIC,214,51,33,13,SS_CENTERIMAGE | SS_SUNKEN
+    CTEXT           "",IDC_STATIC,121,51,15,13,SS_CENTERIMAGE | SS_SUNKEN
+END
+
+IDD_CONFIGURE_DIALOG DIALOGEX 0, 0, 303, 247
+STYLE DS_SYSMODAL | DS_SETFONT | DS_FIXEDSYS | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME
+CAPTION "Настройки Recaps"
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
+BEGIN
+    CONTROL         "",IDC_LIST_HOTKEYS,"SysListView32",LVS_REPORT | LVS_SINGLESEL | LVS_OWNERDRAWFIXED | LVS_ALIGNLEFT | LVS_NOSORTHEADER | WS_BORDER | WS_TABSTOP,7,7,289,75
+    CONTROL         "",IDC_LIST_LANGUAGES,"SysListView32",LVS_REPORT | LVS_SINGLESEL | LVS_OWNERDRAWFIXED | LVS_ALIGNLEFT | LVS_NOSORTHEADER | WS_BORDER | WS_TABSTOP,7,85,289,59
+    CONTROL         "",IDC_LIST_GROUPS,"SysListView32",LVS_REPORT | LVS_SINGLESEL | LVS_OWNERDRAWFIXED | LVS_ALIGNLEFT | LVS_NOSORTHEADER | WS_BORDER | WS_TABSTOP,7,147,289,68
+    PUSHBUTTON      "Закрыть",IDCANCEL,193,227,104,14
+    CONTROL         "<a>Поддержать</a>",IDC_PAYPAL_LINK,"SysLink",WS_TABSTOP,9,228,76,8
+    PUSHBUTTON      "Справка",IDHELP,79,227,104,14
+END
+
+IDD_ABOUT_BOX DIALOGEX 0, 0, 223, 163
+STYLE DS_SYSMODAL | DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+EXSTYLE WS_EX_TOPMOST
+CAPTION "Recaps Switcher — переключение раскладок!"
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
+BEGIN
+    DEFPUSHBUTTON   "ОК",IDOK,113,142,104,14
+    ICON            IDI_MAINFRAME,IDC_STATIC,13,13,20,20
+    LTEXT           "Версия:",IDC_STATIC,55,36,36,8
+    LTEXT           "n/a",IDC_VERSION_STATIC,93,36,123,8
+    LTEXT           "Recaps",IDC_STATIC,55,12,161,8
+    LTEXT           "Программу для вас сделали:",IDC_STATIC,55,54,161,10
+    CONTROL         "<a>Проверить обновления</a>",IDC_SF_LINK,"SysLink",WS_TABSTOP,55,112,161,8
+    LTEXT           "http://recaps.sourceforge.io\r\nSiarzhuk Zharski, Belarus 2017-2024",IDC_STATIC,55,68,161,18
+    LTEXT           "http://www.gooli.org/blog/recaps\r\nEli Golovinsky, Israel 2008",IDC_STATIC,55,89,161,18
+    CONTROL         "",IDC_STATIC,"Static",SS_BLACKFRAME,7,133,209,1
+    LTEXT           "переключатель раскладок.",IDC_STATIC,56,23,161,8
+    CONTROL         "<a>Поддержать</a>",IDC_PAYPAL_LINK,"SysLink",WS_TABSTOP,26,144,76,8
+END
+
+STRINGTABLE
+BEGIN
+    IDS_MENU_ABOUT              "О программе..."
+    IDS_MENU_RUN_AT_LOGON       "Запускать при входе в систему"
+    IDS_MENU_SETTINGS           "Настройки Recaps..."
+    IDS_MENU_SYSTEM_CONFIG      "Настройка языков ввода..."
+    IDS_MENU_EXIT               "Выход"
+    IDS_MENU_LANGUAGE           "Язык"
+    IDS_MENU_LANGUAGE_SYSTEM    "Системный"
+    IDS_MENU_LANGUAGE_ENGLISH   "Английский"
+    IDS_MENU_LANGUAGE_RUSSIAN   "Русский"
+    IDS_MSG_ALREADY_RUNNING     "Recaps уже запущен."
+    IDS_MSG_HOTKEY_IN_USE       "Эта комбинация уже используется. Выберите другую."
+    IDS_MSG_CAPS_HOTKEY_READONLY "Комбинацию «Переключить Caps Lock» нельзя изменить.\nИзмените комбинацию «Циклическое переключение»."
+    IDS_MSG_ERROR_TITLE         "Ошибка Recaps"
+    IDS_MSG_ERROR_PREFIX        "Ошибка: "
+    IDS_HK_DISABLED             "Отключено"
+    IDS_HK_LSHIFT               "Л.Shift"
+    IDS_HK_RSHIFT               "П.Shift"
+    IDS_HK_LCTRL                "Л.Ctrl"
+    IDS_HK_RCTRL                "П.Ctrl"
+    IDS_HK_LALT                 "Л.Alt"
+    IDS_HK_RALT                 "П.Alt"
+    IDS_HK_LWIN                 "Л.Win"
+    IDS_HK_RWIN                 "П.Win"
+    IDS_HK_MENU                 "Меню"
+    IDS_HK_KEYNAME_ERROR        "Ошибка GetKeyNameText: "
+    IDS_COL_ACTION              "Действие"
+    IDS_COL_HOTKEY              "Комбинация"
+    IDS_COL_FLAG                "Флаг"
+    IDS_COL_LOCALE              "Язык [ Раскладка ]"
+    IDS_COL_SCROLL_LED          "Scroll LED"
+    IDS_COL_OVERLAY             "Подсказка"
+    IDS_COL_GROUP_HOTKEY        "Комбинация группы"
+    IDS_ACTION_CYCLE            "Циклическое переключение"
+    IDS_ACTION_RECODE           "Конвертировать на месте"
+    IDS_ACTION_EJECT            "Извлечь CD"
+    IDS_ACTION_CAPS             "Переключить Caps Lock"
+    IDS_ADD_NEW_GROUP           "<добавить группу>"
+    IDS_UNKNOWN                 "Неизвестно"
+    IDS_CAPTION_ACTION          "Комбинация действия: "
+    IDS_CAPTION_GROUP           "Комбинация группы: "
+    IDS_CAPTION_REMAP_SOURCE    "Исходная комбинация переназначения"
+    IDS_CAPTION_REMAP_TARGET    "Целевая комбинация переназначения"
+    IDS_BUTTON_DELETE           "Удалить"
+    IDS_ICON_DIALOG_TITLE       "Выберите значок для раскладки "
+    IDS_ICON_DIALOG_FILTER      "Значки"
+    IDS_COL_ACTIVE              "+"
+END

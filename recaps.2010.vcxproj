@@ -261,6 +261,7 @@
   <ItemGroup>
     <ClCompile Include="configuration.cpp" />
     <ClCompile Include="fixlayouts.cpp" />
+    <ClCompile Include="localization.cpp" />
     <ClCompile Include="recaps.cpp">
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Disabled</Optimization>
       <PreprocessorDefinitions Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">%(PreprocessorDefinitions)</PreprocessorDefinitions>
@@ -296,6 +297,7 @@
   <ItemGroup>
     <ClInclude Include="configuration.h" />
     <ClInclude Include="fixlayouts.h" />
+    <ClInclude Include="localization.h" />
     <ClInclude Include="recaps.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="settings.h" />

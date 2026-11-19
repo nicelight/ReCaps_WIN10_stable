@@ -1,4 +1,6 @@
 #include "stdafx.h"
+#include "resource.h"
+#include "localization.h"
 
 
 #define BUFSIZE 2048
@@ -10,7 +12,7 @@ void ShowError(const WCHAR* message)
 {
 	WCHAR buffer[BUFSIZE];
 
-	LPVOID errMessage;
+	LPVOID errMessage = NULL;
 	FormatMessage(
 		FORMAT_MESSAGE_ALLOCATE_BUFFER
 		| FORMAT_MESSAGE_FROM_SYSTEM
@@ -25,11 +27,13 @@ void ShowError(const WCHAR* message)
 
 	buffer[0] = '\0';
 	wcscat_s(buffer, BUFSIZE, message);
-	wcscat_s(buffer, BUFSIZE, L"\n\nError : ");
-	wcscat_s(buffer, BUFSIZE, (const WCHAR*)errMessage);
+	wcscat_s(buffer, BUFSIZE, L"\n\n");
+	wcscat_s(buffer, BUFSIZE, Tr(IDS_MSG_ERROR_PREFIX).c_str());
+	if (NULL != errMessage)
+		wcscat_s(buffer, BUFSIZE, (const WCHAR*)errMessage);
 
-	MessageBox(NULL, (const WCHAR*)buffer,
-			L"Recaps Error", MB_OK | MB_ICONINFORMATION);
+	MessageBox(NULL, buffer, Tr(IDS_MSG_ERROR_TITLE).c_str(),
+			MB_OK | MB_ICONINFORMATION);
 	LocalFree(errMessage);
 }
 

@@ -6,6 +6,7 @@
 #include "trayicon.h"
 #include "fixlayouts.h"
 #include "settings.h"
+#include "localization.h"
 
 static UINT HklToUint(HKL hkl)
 {
@@ -685,6 +686,8 @@ void SaveConfiguration(const std::map<HKL, KeyboardLayoutInfo>& info)
 	DWORD version = 1;
 	RegSetValueEx(hRootKey, _T("Version"),
 					0, REG_DWORD, (CONST BYTE*)(&version), sizeof(DWORD));
+
+	SaveLanguageSetting();
 
 	RegCloseKey(hRootKey);
 }

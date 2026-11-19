@@ -30,6 +30,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "fixlayouts.h"
 #include "settings.h"
 #include "utils.h"
+#include "localization.h"
 
 
 #if _MSC_VER < 1500  // older than VS2008
@@ -134,16 +135,19 @@ static BOOL CALLBACK MonitorEnumProc(HMONITOR, HDC, LPRECT lpRect, LPARAM)
 int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 		LPSTR lpCmdLine, int nCmdShow)
 {
-	UNREFERENCED_PARAMETER(hInstance);
 	UNREFERENCED_PARAMETER(hPrevInstance);
 	UNREFERENCED_PARAMETER(lpCmdLine);
 	UNREFERENCED_PARAMETER(nCmdShow);
+
+	g_hInstance = hInstance;
+	LoadLanguageSetting();
+	SetThreadUILanguage(GetEffectiveLangId());
 
 	// Prevent from two copies of Recaps from running at the same time
 	HANDLE mutex = CreateMutex(NULL, FALSE, MUTEX);
 	DWORD result = WaitForSingleObject(mutex, 0);
 	if (result == WAIT_TIMEOUT) {
-		MessageBox(NULL, L"Recaps is already running.", L"Recaps",
+		MessageBox(NULL, Tr(IDS_MSG_ALREADY_RUNNING).c_str(), L"Recaps",
 				MB_OK | MB_ICONINFORMATION);
 		return 1;
 	}
@@ -161,7 +165,6 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 	wclx.lpszClassName  = WINDOWCLASS_NAME;
 	RegisterClassEx(&wclx);
 
-	g_hInstance = hInstance;
 	InitializeCriticalSection(&g_csLayouts);
 
 	if (EnumDisplayMonitors(NULL, NULL, MonitorEnumProc, 0)
@@ -434,6 +437,18 @@ int OnCommand(HWND hWnd, WORD wID, HWND hCtl)
 		RunConfiguration(NULL);
 		SaveConfiguration(g_keyboardInfo);
 		break;
+
+	case IDM_LANGUAGE_ENGLISH:
+		SetAppLanguage(eAppLangEnglish);
+		break;
+
+	case IDM_LANGUAGE_RUSSIAN:
+		SetAppLanguage(eAppLangRussian);
+		break;
+
+	case IDM_LANGUAGE_SYSTEM:
+		SetAppLanguage(eAppLangSystem);
+		break;
 	}
 
 	return 0;
@@ -451,7 +466,8 @@ BOOL ShowPopupMenu(HWND hWnd)
 	// Create the menu
 	int idx = 0;
 	hPop = CreatePopupMenu();
-	InsertMenu(hPop, idx++, MF_STRING | MF_HILITE, IDM_ABOUT, L"About...");
+	InsertMenu(hPop, idx++, MF_STRING, IDM_ABOUT,
+			Tr(IDS_MENU_ABOUT).c_str());
 	InsertMenu(hPop, idx++, MF_SEPARATOR, 0, NULL);
 
 	// run at log on setting
@@ -459,12 +475,34 @@ BOOL ShowPopupMenu(HWND hWnd)
 	if (RegCheckAndSetRunAtLogon(false))
 		flags |= MF_CHECKED;
 
-	InsertMenu(hPop, idx++, flags, IDM_STARTUP, _T("Run at user log on"));
+	InsertMenu(hPop, idx++, flags, IDM_STARTUP,
+			Tr(IDS_MENU_RUN_AT_LOGON).c_str());
 
-	InsertMenu(hPop, idx++, MF_BYPOSITION | MF_STRING, IDM_LANG_SETTINGS, _T("Recaps Settings ..."));
-	InsertMenu(hPop, idx++, MF_BYPOSITION | MF_STRING, IDM_LANG_CONFIG, _T("System Configuration ..."));
+	InsertMenu(hPop, idx++, MF_BYPOSITION | MF_STRING, IDM_LANG_SETTINGS,
+			Tr(IDS_MENU_SETTINGS).c_str());
+	InsertMenu(hPop, idx++, MF_BYPOSITION | MF_STRING, IDM_LANG_CONFIG,
+			Tr(IDS_MENU_SYSTEM_CONFIG).c_str());
 	InsertMenu(hPop, idx++, MF_SEPARATOR, 0, NULL);
-	InsertMenu(hPop, idx++, MF_BYPOSITION | MF_STRING, IDM_EXIT, L"Exit");
+
+	// language selection
+	HMENU hLang = CreatePopupMenu();
+	UINT checkEnglish = (eAppLangEnglish == g_eAppLanguage) ? MF_CHECKED : 0;
+	UINT checkRussian = (eAppLangRussian == g_eAppLanguage) ? MF_CHECKED : 0;
+	UINT checkSystem = (eAppLangSystem == g_eAppLanguage) ? MF_CHECKED : 0;
+
+	InsertMenu(hLang, 0, MF_BYPOSITION | MF_STRING | checkEnglish,
+			IDM_LANGUAGE_ENGLISH, Tr(IDS_MENU_LANGUAGE_ENGLISH).c_str());
+	InsertMenu(hLang, 1, MF_BYPOSITION | MF_STRING | checkRussian,
+			IDM_LANGUAGE_RUSSIAN, Tr(IDS_MENU_LANGUAGE_RUSSIAN).c_str());
+	InsertMenu(hLang, 2, MF_BYPOSITION | MF_STRING | checkSystem,
+			IDM_LANGUAGE_SYSTEM, Tr(IDS_MENU_LANGUAGE_SYSTEM).c_str());
+
+	InsertMenu(hPop, idx++, MF_BYPOSITION | MF_POPUP | MF_STRING,
+			reinterpret_cast<UINT_PTR>(hLang),
+			Tr(IDS_MENU_LANGUAGE).c_str());
+	InsertMenu(hPop, idx++, MF_SEPARATOR, 0, NULL);
+	InsertMenu(hPop, idx++, MF_BYPOSITION | MF_STRING, IDM_EXIT,
+			Tr(IDS_MENU_EXIT).c_str());
 
 	SetMenuDefaultItem(hPop, IDM_LANG_SETTINGS, FALSE);
 

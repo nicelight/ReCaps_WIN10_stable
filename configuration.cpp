@@ -4,6 +4,7 @@
 
 #include "configuration.h"
 #include "settings.h"
+#include "localization.h"
 
 
 std::map<HKL, KeyboardLayoutInfo>		g_keyboardInfo;
@@ -70,20 +71,20 @@ DWORD VkToModBit(DWORD vkCode)
 void ExpandHotkeyName(std::basic_string<TCHAR>& name, UHK uhk)
 {
 	if (0 == uhk.ulHotKey) {
-		name = _T("Disabled");
+		name = Tr(IDS_HK_DISABLED);
 		return;
 	}
 
-	const TCHAR* aszModifiers[] = {
-		_T("L.Shift"),		// LEFT_LSHIFT	= 1 << 0
-		_T("R.Shift"),		// LEFT_RSHIFT	= 1 << 1
-		_T("L.Control"),	// LEFT_LCTRL		= 1 << 2
-		_T("R.Control"),	// LEFT_RCTRL		= 1 << 3
-		_T("L.Alt"),			// LEFT_LALT		= 1 << 4
-		_T("R.Alt"),			// LEFT_RALT		= 1 << 5
-		_T("L.Win"),			// LEFT_LWIN		= 1 << 6
-		_T("R.Win"),			// LEFT_RWIN		= 1 << 7
-		_T("Menu")				// LEFT_MENU		= 1 << 8
+	const UINT aModifierIds[] = {
+		IDS_HK_LSHIFT,		// LEFT_LSHIFT	= 1 << 0
+		IDS_HK_RSHIFT,		// LEFT_RSHIFT	= 1 << 1
+		IDS_HK_LCTRL,		// LEFT_LCTRL	= 1 << 2
+		IDS_HK_RCTRL,		// LEFT_RCTRL	= 1 << 3
+		IDS_HK_LALT,		// LEFT_LALT	= 1 << 4
+		IDS_HK_RALT,		// LEFT_RALT	= 1 << 5
+		IDS_HK_LWIN,		// LEFT_LWIN	= 1 << 6
+		IDS_HK_RWIN,		// LEFT_RWIN	= 1 << 7
+		IDS_HK_MENU			// LEFT_MENU	= 1 << 8
 	};
 
 	DWORD dwModifiers = uhk.btMods;
@@ -93,7 +94,7 @@ void ExpandHotkeyName(std::basic_string<TCHAR>& name, UHK uhk)
 	int i = 0;
 	for (DWORD mask = 1; mask != LEFT_MAX; mask <<= 1, i++)
 		if (0 != (dwModifiers & mask)) {
-			name += aszModifiers[i];
+			name += Tr(aModifierIds[i]);
 			name += _T(" + ");
 		}
 
@@ -119,13 +120,16 @@ void ExpandHotkeyName(std::basic_string<TCHAR>& name, UHK uhk)
 		if (GetKeyNameText(dwScanCode << 16 | uhk.bExtKey << 24, &buffer[0], buffer.size())) {
 			name += &buffer[0];
 		} else {
-			_sntprintf(&buffer[0], 64, _T("GetKeyNameText error %d"), GetLastError());
+			TCHAR szError[32] = { 0 };
+			_sntprintf(szError, _countof(szError), _T("%d"), GetLastError());
+			name += Tr(IDS_HK_KEYNAME_ERROR);
+			name += szError;
+
+			_sntprintf(&buffer[0], buffer.size(), _T("VK:%#x; SK:%#x"), uhk.btVK, dwScanCode);
 			OutputDebugString(&buffer[0]);
-			_sntprintf(&buffer[0], 64, _T("VK:%#x; SK:%#x"), uhk.btVK, dwScanCode);
-			name += &buffer[0];
 		}
 	} else
-		name += aszModifiers[index];
+		name += Tr(aModifierIds[index]);
 }
 
 
@@ -174,7 +178,7 @@ static bool OnApply(bool bDisable)
 			i = g_hotkeyInfo.find(st_uhkCustHotkey);
 		if (st_uhkCustHotkeyOrg.ulHotKey != st_uhkCustHotkey.ulHotKey
 					&& i != g_hotkeyInfo.end()) {
-			MessageBox(NULL, _T("The hotkey is already in use. Please choose another one."),
+			MessageBox(NULL, Tr(IDS_MSG_HOTKEY_IN_USE).c_str(),
 				_T("Recaps"), MB_OK | MB_ICONWARNING | MB_TASKMODAL | MB_TOPMOST);
 			return false;
 		}
@@ -313,9 +317,8 @@ static INT_PTR __stdcall ShortCutDialogProc(HWND hDlg, UINT message,
 
 static int RunShortCutConfiguration(HWND hParentWnd, LPARAM lParam)
 {
-	LPCTSTR lpTemplateName = MAKEINTRESOURCE(IDD_SELECT_HOTKEY_DIALOG);
-	return DialogBoxParam(g_hInstance, lpTemplateName,
-		hParentWnd, ShortCutDialogProc, lParam);
+	return DialogBoxLocalized(g_hInstance, IDD_SELECT_HOTKEY_DIALOG,
+			hParentWnd, ShortCutDialogProc, lParam);
 }
 
 
@@ -420,9 +423,8 @@ static INT_PTR __stdcall OverlayHintDialogProc(HWND hDlg, UINT message,
 
 static int RunOverlayHintConfiguration(HWND hParentWnd)
 {
-	LPCTSTR lpTemplateName = MAKEINTRESOURCE(IDD_OVERLAY_HINT_DIALOG);
-	return DialogBox(g_hInstance,
-		lpTemplateName, hParentWnd, OverlayHintDialogProc);
+	return DialogBoxLocalized(g_hInstance, IDD_OVERLAY_HINT_DIALOG,
+			hParentWnd, OverlayHintDialogProc, 0);
 }
 
 
@@ -697,19 +699,20 @@ static BOOL InitHotkeysList(HWND hwnd)
 
 	// init columns
 	struct {
-		const TCHAR* pszName;
+		UINT idName;
 		int iWidth;
 	} aColumns[] = {
-		{ _T("Action"),						215 },
-		{ _T("Hotkey"),						215 },
+		{ IDS_COL_ACTION,					215 },
+		{ IDS_COL_HOTKEY,					215 },
 	};
 
 	LVCOLUMN lvc = { 0 };
 	lvc.mask = LVCF_FMT | LVCF_WIDTH | LVCF_TEXT | LVCF_SUBITEM;
 
 	for (int i = 0; i < sizeof(aColumns) / sizeof(aColumns[0]); i++) {
+		std::basic_string<TCHAR> columnName = Tr(aColumns[i].idName);
 		lvc.iSubItem = i;
-		lvc.pszText = (TCHAR*)aColumns[i].pszName;
+		lvc.pszText = const_cast<TCHAR*>(columnName.c_str());
 		lvc.cx = aColumns[i].iWidth;
 
 		if ( i < 1 )
@@ -723,13 +726,13 @@ static BOOL InitHotkeysList(HWND hwnd)
 
 	// Add items for the actions
 	struct {
-		const TCHAR* pszName;
+		UINT idName;
 		UHK uhk;
 	} aActionItems[] = {
-		{ _T("Cycle Switch"),			0 },
-		{ _T("Convert Inplace"),	0 },
-		{ _T("Eject CD"),					0 },
-		{ _T("Toggle Caps Lock"),	0 },
+		{ IDS_ACTION_CYCLE,	0 },
+		{ IDS_ACTION_RECODE,	0 },
+		{ IDS_ACTION_EJECT,		0 },
+		{ IDS_ACTION_CAPS,		0 },
 	};
 
 /*	aActionItems[0].uhk.bCycleHK	= 1;
@@ -774,7 +777,8 @@ static BOOL InitHotkeysList(HWND hwnd)
 		lvi.mask |= LVIF_PARAM;
 		lvi.iItem  = i;
 		lvi.iSubItem = 0;
-		lvi.pszText = (LPTSTR)aActionItems[i].pszName;
+		std::basic_string<TCHAR> actionName = Tr(aActionItems[i].idName);
+		lvi.pszText = const_cast<TCHAR*>(actionName.c_str());
 		lvi.lParam = (LPARAM)aActionItems[i].uhk.ulKey;
 
 		if (ListView_InsertItem(hWndList, &lvi) == -1)
@@ -860,22 +864,23 @@ static BOOL InitLanguagesList(HWND hwnd)
 
 	// init columns
 	struct {
-		const TCHAR* pszName;
+		UINT idName;
 		int iWidth;
 	} aColumns[] = {
-		{ _T("+"),							cnActiveColumnWidth  },
-		{ _T("Flag"),						cnFlagColumnWidth  },
-		{ _T("Locale [ Keyboard Layout ]"), cnLocaleColumnWidth },
-		{ _T("Scroll LED"),			cnLedColumnWidth  },
-		{ _T("Overlay hint"),		cnHindColumnWidth }
+		{ IDS_COL_ACTIVE,					cnActiveColumnWidth  },
+		{ IDS_COL_FLAG,						cnFlagColumnWidth  },
+		{ IDS_COL_LOCALE,					cnLocaleColumnWidth },
+		{ IDS_COL_SCROLL_LED,		cnLedColumnWidth  },
+		{ IDS_COL_OVERLAY,			cnHindColumnWidth }
 	};
 
 	LVCOLUMN lvc = { 0 };
 	lvc.mask = LVCF_WIDTH | LVCF_TEXT | LVCF_SUBITEM;
 
 	for (int i = 0; i < sizeof(aColumns) / sizeof(aColumns[0]); i++) {
+		std::basic_string<TCHAR> columnName = Tr(aColumns[i].idName);
 		lvc.iSubItem = i;
-		lvc.pszText = (TCHAR*)aColumns[i].pszName;
+		lvc.pszText = const_cast<TCHAR*>(columnName.c_str());
 		lvc.cx = aColumns[i].iWidth;
 
 		if (ListView_InsertColumn(hWndList, i, &lvc) == -1)
@@ -929,7 +934,8 @@ static BOOL InitGroupsList(HWND hwnd)
 	lvc.mask = LVCF_FMT | LVCF_WIDTH | LVCF_TEXT | LVCF_SUBITEM;
 
 //  lvc.iSubItem = i;
-	lvc.pszText = (TCHAR*)_T("Group Hotkey");
+	std::basic_string<TCHAR> groupHeader = Tr(IDS_COL_GROUP_HOTKEY);
+	lvc.pszText = const_cast<TCHAR*>(groupHeader.c_str());
 	lvc.cx = 150;
 
 	if (ListView_InsertColumn(hWndList, 0, &lvc) == -1)
@@ -985,7 +991,8 @@ static BOOL InitGroupsList(HWND hwnd)
 	lvi.iSubItem = 0;
 	lvi.iImage = g_hotkeyInfo.size();
 
-	lvi.pszText = (LPTSTR)_T("<add new group>");
+	std::basic_string<TCHAR> addGroup = Tr(IDS_ADD_NEW_GROUP);
+	lvi.pszText = const_cast<TCHAR*>(addGroup.c_str());
 	lvi.lParam = (LPARAM)0;
 
 	if (ListView_InsertItem(hWndList, &lvi) == -1)
@@ -1175,12 +1182,13 @@ static LRESULT OnHotkeysClick(HWND hwnd, NMHDR* pnmhdr)
 //		if (uhk.bCapsHK) { // Caps Lock hotkey is not editable.
 		if (eHKTCaps == uhk.btHKType) { // Caps Lock hotkey is not editable.
 			MessageBox(NULL,
-				_T("A 'Toggle Capslock key' hotkey is not editable.\nChange the 'Cycle Switch' one instead."),
+				Tr(IDS_MSG_CAPS_HOTKEY_READONLY).c_str(),
 				_T("Recaps"), MB_OK | MB_ICONINFORMATION | MB_TASKMODAL | MB_TOPMOST);
 			break;
 		}
 
 		std::basic_string<TCHAR> caption(&text[0]);
+		std::basic_string<TCHAR> remapCaption;
 		HotkeyDialogInit InitData(uhk, caption.c_str());
 
 //		if (uhk.bRemapHK) {
@@ -1192,18 +1200,20 @@ static LRESULT OnHotkeysClick(HWND hwnd, NMHDR* pnmhdr)
 				if (i == g_hotkeyInfo.end() || i->second.empty())
 					continue;
 				InitData.uhk = i->second.begin()->second;
-				InitData.szCaption = _T("Remap Target hotkey");
+				remapCaption = Tr(IDS_CAPTION_REMAP_TARGET);
+				InitData.szCaption = remapCaption.c_str();
 				break;
 			}
 			case 0:
-				InitData.szCaption = _T("Remap Source hotkey");
+				remapCaption = Tr(IDS_CAPTION_REMAP_SOURCE);
+				InitData.szCaption = remapCaption.c_str();
 				break;
 			default:
 				continue;
 			}
 
 		} else {
-			caption.insert(0, _T("Action hotkey: "));
+			caption.insert(0, Tr(IDS_CAPTION_ACTION));
 			InitData.szCaption = caption.c_str();
 		}
 
@@ -1381,7 +1391,7 @@ static LRESULT OnGroupsClick(HWND hwnd, NMHDR* pnmhdr)
 		ListView_GetItem(pnmhdr->hwndFrom, &lvi);
 
 		UHK uhk = (UHK)(lvi.lParam);
-		std::basic_string<TCHAR> caption(_T("Group hotkey: "));
+		std::basic_string<TCHAR> caption = Tr(IDS_CAPTION_GROUP);
 		caption += &text[0];
 
 		lvi.mask     = LVIF_TEXT;
@@ -1391,7 +1401,8 @@ static LRESULT OnGroupsClick(HWND hwnd, NMHDR* pnmhdr)
 
 		if (0 == lvhti.iSubItem) { // Hotkey
 			lvi.mask = 0;
-			HotkeyDialogInit InitData(uhk, caption.c_str(), _T("Delete"));
+			std::basic_string<TCHAR> deleteCaption = Tr(IDS_BUTTON_DELETE);
+			HotkeyDialogInit InitData(uhk, caption.c_str(), deleteCaption.c_str());
 			g_bCustomizingOn = true;
 			st_dwPrevKeysCount = g_dwKeysCount;
 
@@ -1738,7 +1749,10 @@ static void OnConfigureCommand(
 		std::basic_string<TCHAR> strDir(_MAX_DIR, 0);
 		GetModuleFileName(g_hInstance, &strPath[0], strPath.size());
 		_tsplitpath(&strPath[0], &strDrive[0], &strDir[0], NULL, NULL);
-		_tmakepath(&strPath[0], &strDrive[0], &strDir[0], _T("help\\recaps"), _T("html"));
+		std::basic_string<TCHAR> helpName = IsRussianUi()
+				? _T("help\\recaps_ru") : _T("help\\recaps");
+		_tmakepath(&strPath[0], &strDrive[0], &strDir[0],
+				helpName.c_str(), _T("html"));
 		if (reinterpret_cast<INT_PTR>(ShellExecute(NULL, _T("open"), strPath.c_str(),
 					NULL, NULL, SW_SHOWNORMAL)) > 32)
 			PostMessage(st_hwndConfigureBox, WM_COMMAND, IDCANCEL, 0);
@@ -1915,7 +1929,7 @@ static void OnConfigureOwnerDrawGroups(HWND hwnd, const DRAWITEMSTRUCT *lpDrawIt
 
 	switch (lpDrawItem->itemData) {
 	case 0:
-		name = _T("<add new group>");
+		name = Tr(IDS_ADD_NEW_GROUP);
 		break;
 #if 0 // SYSKEY - see shelve!
 	case -1: {
@@ -1933,7 +1947,7 @@ static void OnConfigureOwnerDrawGroups(HWND hwnd, const DRAWITEMSTRUCT *lpDrawIt
 		UHK uhk(lpDrawItem->itemData);
 		i_hk = g_hotkeyInfo.find(uhk);
 		if (i_hk == g_hotkeyInfo.end())
-			name += _T("Unknown");
+			name += Tr(IDS_UNKNOWN);
 		else
 			ExpandHotkeyName(name, i_hk->first);
 		}
@@ -2206,9 +2220,8 @@ static INT_PTR __stdcall ConfigureDialogProc(HWND hDlg, UINT message,
 int RunConfiguration(HWND hParentWnd)
 {
 	if (NULL == st_hwndConfigureBox) {
-		LPCTSTR lpTemplateName = MAKEINTRESOURCE(IDD_CONFIGURE_DIALOG);
-		int nResult = DialogBox(g_hInstance,
-			lpTemplateName, hParentWnd, ConfigureDialogProc);
+		int nResult = DialogBoxLocalized(g_hInstance, IDD_CONFIGURE_DIALOG,
+				hParentWnd, ConfigureDialogProc, 0);
 
 		st_hwndConfigureBox = NULL;
 		return nResult;
@@ -2235,18 +2248,24 @@ bool LoadExternalIcon(HICON* phIcon, LPCTSTR lpszName)
 	_tsplitpath(szPath, szDrive, szDir, NULL, NULL);
 	_tmakepath(szPath, szDrive, szDir, _T("flags"), NULL);
 
+	std::basic_string<TCHAR> filter = Tr(IDS_ICON_DIALOG_FILTER);
+	filter.push_back(TCHAR('\0'));
+	filter += _T("*.ico");
+	filter.push_back(TCHAR('\0'));
+	filter.push_back(TCHAR('\0'));
+
 	ofn.lStructSize = sizeof(ofn);
 	ofn.hwndOwner = g_hwndMessageWindow;
 	ofn.lpstrFile = szFile;
 	ofn.nMaxFile = _countof(szFile);
-	ofn.lpstrFilter = _T("Icons\0*.ico\0");
+	ofn.lpstrFilter = filter.c_str();
 	ofn.nFilterIndex = 0;
 	ofn.lpstrFileTitle = NULL;
 	ofn.nMaxFileTitle = 0;
 	ofn.lpstrInitialDir = szPath;
 	ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
 
-	std::basic_string<TCHAR> strTitle(_T("Select icon for layout "));
+	std::basic_string<TCHAR> strTitle = Tr(IDS_ICON_DIALOG_TITLE);
 	strTitle += lpszName;
 	ofn.lpstrTitle = strTitle.c_str();
 
@@ -2355,9 +2374,8 @@ int AboutBoxDialog(HWND hParentWnd)
 	MessageBeep(MB_ICONINFORMATION);
 
 	if (NULL == st_hwndAboutBox) {
-		LPCTSTR lpTemplateName = MAKEINTRESOURCE(IDD_ABOUT_BOX);
-		int nResult = DialogBox(g_hInstance,
-			lpTemplateName, hParentWnd, AboutBoxCutDialogProc);
+		int nResult = DialogBoxLocalized(g_hInstance, IDD_ABOUT_BOX,
+				hParentWnd, AboutBoxCutDialogProc, 0);
 
 		st_hwndAboutBox = NULL;
 		return nResult;
