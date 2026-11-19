@@ -1,0 +1,73 @@
+name: Build and Release
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build (${{ matrix.platform }})
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [x64, Win32, ARM64]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Build Release
+        run: >
+          msbuild recaps.2010.vcxproj
+          /t:Rebuild
+          /p:Configuration=Release
+          /p:Platform=${{ matrix.platform }}
+          /p:PlatformToolset=v145
+          /p:PreBuildEventUseInBuild=false
+          /m /nologo
+
+      - name: Package
+        shell: pwsh
+        run: |
+          $package = "package/${{ matrix.platform }}"
+          New-Item -ItemType Directory -Force -Path $package | Out-Null
+          Copy-Item "${{ matrix.platform }}\Release\recaps.exe" -Destination $package
+          Copy-Item -Recurse -Force help -Destination $package
+          Copy-Item -Recurse -Force flags -Destination $package
+          Copy-Item -Path readme.txt, LICENSE -Destination $package
+          Compress-Archive -Path "$package/*" -DestinationPath "recaps-${{ matrix.platform }}.zip" -Force
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: recaps-${{ matrix.platform }}
+          path: recaps-${{ matrix.platform }}.zip
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download packages
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*.zip
+          generate_release_notes: true

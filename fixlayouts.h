@@ -25,11 +25,11 @@ void ConvertSelectedTextInActiveWindow(HKL hklSource, HKL hklTarget);
 WCHAR LayoutConvertChar(WCHAR ch, HKL hklSource, HKL hklTarget);
 size_t LayoutConvertString(const WCHAR* str, WCHAR* buffer,
 		size_t size, HKL hklSource, HKL hklTarget);
-HKL DetectLayoutFromString(const WCHAR* str, BOOL* pmatches);
+HKL DetectLayoutFromString(const WCHAR* str, int* pmatches);
 
 // Functions to store and restoe all of the data in the clipboard
 BOOL StoreClipboardData(ClipboardData* formats);
-BOOL RestoreClipboardData(const ClipboardData* formats);
+BOOL RestoreClipboardData(ClipboardData* formats);
 void FreeClipboardData(ClipboardData* formats);
 
 // Convenience functions for the clipboard

@@ -12,7 +12,7 @@ void AddTrayIcon(HWND hWnd, UINT uID,
 	nid.uFlags              = NIF_ICON | NIF_MESSAGE | NIF_TIP;
 	nid.uCallbackMessage    = uCallbackMsg;
 	nid.hIcon               = hIcon;
-	wcscpy_s(nid.szTip, sizeof(WCHAR)*64, pszToolTip);
+	wcsncpy_s(nid.szTip, _countof(nid.szTip), pszToolTip, _TRUNCATE);
 	Shell_NotifyIcon(NIM_ADD, &nid);
 }
 
@@ -31,7 +31,7 @@ void ModifyTrayIcon(
 	}
 
 	if (pszToolTip) {
-		wcscpy_s(nid.szTip, sizeof(WCHAR)*64, pszToolTip);
+		wcsncpy_s(nid.szTip, _countof(nid.szTip), pszToolTip, _TRUNCATE);
 		nid.uFlags |= NIF_TIP;
 	}
 

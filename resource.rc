@@ -7,7 +7,7 @@
 //
 // Generated from the TEXTINCLUDE 2 resource.
 //
-#include "afxres.h"
+#include "winres.h"
 /////////////////////////////////////////////////////////////////////////////
 #undef APSTUDIO_READONLY_SYMBOLS
 
@@ -177,7 +177,7 @@ END
 
 2 TEXTINCLUDE 
 BEGIN
-    "#include ""afxres.h""\0"
+    "#include ""winres.h""\0"
 END
 
 3 TEXTINCLUDE 
@@ -190,8 +190,65 @@ END
 
 #endif    // APSTUDIO_INVOKED
 
+STRINGTABLE
+BEGIN
+    IDS_MENU_ABOUT              "About..."
+    IDS_MENU_RUN_AT_LOGON       "Run at user log on"
+    IDS_MENU_SETTINGS           "Recaps Settings ..."
+    IDS_MENU_SYSTEM_CONFIG      "System Configuration ..."
+    IDS_MENU_EXIT               "Exit"
+    IDS_MENU_LANGUAGE           "Language"
+    IDS_MENU_LANGUAGE_SYSTEM    "System"
+    IDS_MENU_LANGUAGE_ENGLISH   "English"
+    IDS_MENU_LANGUAGE_RUSSIAN   "Russian"
+    IDS_MSG_ALREADY_RUNNING     "Recaps is already running."
+    IDS_MSG_HOTKEY_IN_USE       "The hotkey is already in use. Please choose another one."
+    IDS_MSG_CAPS_HOTKEY_READONLY "A 'Toggle Capslock key' hotkey is not editable.\nChange the 'Cycle Switch' one instead."
+    IDS_MSG_ERROR_TITLE         "Recaps Error"
+    IDS_MSG_ERROR_PREFIX        "Error : "
+    IDS_HK_DISABLED             "Disabled"
+    IDS_HK_LSHIFT               "L.Shift"
+    IDS_HK_RSHIFT               "R.Shift"
+    IDS_HK_LCTRL                "L.Control"
+    IDS_HK_RCTRL                "R.Control"
+    IDS_HK_LALT                 "L.Alt"
+    IDS_HK_RALT                 "R.Alt"
+    IDS_HK_LWIN                 "L.Win"
+    IDS_HK_RWIN                 "R.Win"
+    IDS_HK_MENU                 "Menu"
+    IDS_HK_KEYNAME_ERROR        "GetKeyNameText error: "
+    IDS_COL_ACTION              "Action"
+    IDS_COL_HOTKEY              "Hotkey"
+    IDS_COL_FLAG                "Flag"
+    IDS_COL_LOCALE              "Locale [ Keyboard Layout ]"
+    IDS_COL_SCROLL_LED          "Scroll LED"
+    IDS_COL_OVERLAY             "Overlay hint"
+    IDS_COL_GROUP_HOTKEY        "Group Hotkey"
+    IDS_ACTION_CYCLE            "Cycle Switch"
+    IDS_ACTION_RECODE           "Convert Inplace"
+    IDS_ACTION_EJECT            "Eject CD"
+    IDS_ACTION_CAPS             "Toggle Caps Lock"
+    IDS_ADD_NEW_GROUP           "<add new group>"
+    IDS_UNKNOWN                 "Unknown"
+    IDS_CAPTION_ACTION          "Action hotkey: "
+    IDS_CAPTION_GROUP           "Group hotkey: "
+    IDS_CAPTION_REMAP_SOURCE    "Remap Source hotkey"
+    IDS_CAPTION_REMAP_TARGET    "Remap Target hotkey"
+    IDS_BUTTON_DELETE           "Delete"
+    IDS_ICON_DIALOG_TITLE       "Select icon for layout "
+    IDS_ICON_DIALOG_FILTER      "Icons"
+    IDS_COL_ACTIVE              "+"
+END
+
 #endif    // English (United States) resources
 /////////////////////////////////////////////////////////////////////////////
+
+
+/////////////////////////////////////////////////////////////////////////////
+// Russian resources
+//
+#include "lang_ru.rc2"
+#pragma code_page(1252)
 
 
 

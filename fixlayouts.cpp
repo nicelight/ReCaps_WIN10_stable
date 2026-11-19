@@ -43,7 +43,13 @@ void ConvertSelectedTextInActiveWindow(HKL hklSource, HKL hklTarget)
 		Sleep(30);
 
 	int nErr = dwSN != GetClipboardSequenceNumber() ? 0 : 2;
-	
+	bool bRestoreClipboard = 0 == nErr;
+
+	// if Ctrl-C did not put anything new into the clipboard, do not convert
+	// and paste the stale clipboard contents over the user's selection
+	if (0 != nErr)
+		goto cleanup;
+
 	sourceText = GetClipboardText();
 	if (NULL == sourceText || L'\0' == sourceText[0]) {
 		nErr += 1;
@@ -63,6 +69,10 @@ void ConvertSelectedTextInActiveWindow(HKL hklSource, HKL hklTarget)
 	// convert the text between layouts
 	size_t length = wcslen(sourceText);
 	targetText = (WCHAR*)malloc(sizeof(WCHAR) * (length + 1));
+	if (NULL == targetText) {
+		nErr += 1;
+		goto cleanup;
+	}
 	size_t converted = LayoutConvertString(sourceText, targetText,
 			length + 1, hklSource, hklTarget);
 
@@ -92,7 +102,8 @@ void ConvertSelectedTextInActiveWindow(HKL hklSource, HKL hklTarget)
 	// restore the original clipboard data
 cleanup:
 	if (bClipboardStored) {
-		RestoreClipboardData(&prevClipboardData);
+		if (bRestoreClipboard)
+			RestoreClipboardData(&prevClipboardData);
 		FreeClipboardData(&prevClipboardData);
 	}
 
@@ -113,6 +124,9 @@ cleanup:
 // Converts a character from one keyboard layout to another
 WCHAR LayoutConvertChar(WCHAR ch, HKL hklSource, HKL hklTarget)
 {
+	if (NULL == hklSource || NULL == hklTarget)
+		return 0;
+
 	// special handling for some ambivalent characters in hebrew layout
 	if (hklSource == HKL_HEBREW && hklTarget == HKL_ENGLISH) {
 		switch (ch) {
@@ -169,8 +183,15 @@ WCHAR LayoutConvertChar(WCHAR ch, HKL hklSource, HKL hklTarget)
 size_t LayoutConvertString(const WCHAR* str, WCHAR* buffer,
 		size_t size, HKL hklSource, HKL hklTarget)
 {
+	if (NULL == str || NULL == buffer || 0 == size)
+		return 0;
+
+	size_t length = wcslen(str);
+	if (length >= size)
+		length = size - 1;
+
 	size_t i;
-	for (i = 0; i < wcslen(str) && i < size - 1; i++) {
+	for (i = 0; i < length; i++) {
 		WCHAR ch = LayoutConvertChar(str[i], hklSource, hklTarget);
 		if (ch == 0)
 			return 0;
@@ -191,17 +212,28 @@ size_t LayoutConvertString(const WCHAR* str, WCHAR* buffer,
 HKL DetectLayoutFromString(const WCHAR* str, int* pmatches)
 {
 	HKL result = NULL;
-	HKL* hkls;
-	UINT layoutCount;
-	layoutCount = GetKeyboardLayoutList(0, NULL);
-	hkls = (HKL*)malloc(sizeof(HKL) * layoutCount);
-	GetKeyboardLayoutList(layoutCount, hkls);
-
 	int matches = 0;
-	for (size_t layout = 0; layout < layoutCount; layout++) {
+
+	int layoutCount = GetKeyboardLayoutList(0, NULL);
+	if (layoutCount <= 0 || NULL == str) {
+		if (pmatches)
+			*pmatches = 0;
+		return NULL;
+	}
+
+	std::vector<HKL> hkls(layoutCount);
+	int loaded = GetKeyboardLayoutList(layoutCount, &hkls[0]);
+	if (loaded <= 0) {
+		if (pmatches)
+			*pmatches = 0;
+		return NULL;
+	}
+
+	size_t length = wcslen(str);
+	for (int layout = 0; layout < loaded; layout++) {
 		BOOL validLayout = TRUE;
-		for (size_t i = 0; i < wcslen(str); i++) {
-			UINT vk = VkKeyScanEx(str[i], hkls[layout]);
+		for (size_t i = 0; i < length; i++) {
+			SHORT vk = VkKeyScanEx(str[i], hkls[layout]);
 			if (vk == -1) {
 				validLayout = FALSE;
 				break;
@@ -233,54 +265,78 @@ BOOL StoreClipboardData(ClipboardData* formats)
 	formats->count = 0;
 	formats->dataArray = NULL;
 
-	if (OpenClipboardWithRetry()) {
-		formats->count = CountClipboardFormats();
-		formats->dataArray = (ClipboardFormat*)malloc(
-				sizeof(ClipboardData) * formats->count);
-		ZeroMemory(formats->dataArray, sizeof(ClipboardData) * formats->count);
-		int i = 0;
-		UINT format = EnumClipboardFormats(0);
-		while (format) {
-			HANDLE dataHandle = GetClipboardData(format);
-			LPVOID source = NULL;
-			size_t size = 0;
-			if (NULL != dataHandle
-					&& NULL != (source = GlobalLock(dataHandle))
-					&& 0 != (size = GlobalSize(dataHandle))) {
-				formats->dataArray[i].format = format;
-				formats->dataArray[i].dataHandle = GlobalAlloc(GHND, size);
-				LPVOID dest = GlobalLock(formats->dataArray[i].dataHandle);
-				CopyMemory(dest, source, size);
-				GlobalUnlock(formats->dataArray[i].dataHandle);
-				GlobalUnlock(dataHandle);
-			}
+	if (!OpenClipboardWithRetry())
+		return FALSE;
 
-			// next format
-			format = EnumClipboardFormats(format);
-			i++;
+	int count = CountClipboardFormats();
+	ClipboardFormat* dataArray = NULL;
+	if (count > 0) {
+		dataArray = (ClipboardFormat*)calloc(
+				count, sizeof(ClipboardFormat));
+		if (NULL == dataArray) {
+			CloseClipboard();
+			return FALSE;
 		}
-
-		CloseClipboard();
-		return TRUE;
 	}
 
-	return FALSE;
+	int i = 0;
+	UINT format = EnumClipboardFormats(0);
+	while (format && i < count) {
+		HANDLE dataHandle = GetClipboardData(format);
+		LPVOID source = NULL;
+		if (NULL != dataHandle
+				&& NULL != (source = GlobalLock(dataHandle))) {
+			SIZE_T size = GlobalSize(dataHandle);
+			if (size > 0) {
+				HANDLE copy = GlobalAlloc(GHND, size);
+				if (NULL != copy) {
+					LPVOID dest = GlobalLock(copy);
+					if (NULL != dest) {
+						CopyMemory(dest, source, size);
+						GlobalUnlock(copy);
+						dataArray[i].format = format;
+						dataArray[i].dataHandle = copy;
+					} else
+						GlobalFree(copy);
+				}
+			}
+			GlobalUnlock(dataHandle);
+		}
+
+		// next format
+		format = EnumClipboardFormats(format);
+		i++;
+	}
+
+	CloseClipboard();
+
+	formats->count = count;
+	formats->dataArray = dataArray;
+	return TRUE;
 }
 
 
 ///////////////////////////////////////////////////////////////////////////////
 // Restores the data in the clipboard from `formats` that was generated by
 // StoreClipboardData.
-BOOL RestoreClipboardData(const ClipboardData* formats)
+BOOL RestoreClipboardData(ClipboardData* formats)
 {
 	if (NULL == formats || formats->count <= 0 || NULL == formats->dataArray)
 		return FALSE;
 
 	if (OpenClipboardWithRetry()) {
 		EmptyClipboard();
-		for (int i = 0; i < formats->count; i++)
-			SetClipboardData(
-				formats->dataArray[i].format, formats->dataArray[i].dataHandle);
+		for (int i = 0; i < formats->count; i++) {
+			ClipboardFormat& entry = formats->dataArray[i];
+			if (NULL == entry.dataHandle || 0 == entry.format)
+				continue;
+
+			// SetClipboardData takes ownership only on success
+			if (NULL == SetClipboardData(entry.format, entry.dataHandle))
+				GlobalFree(entry.dataHandle);
+
+			entry.dataHandle = NULL;
+		}
 
 		CloseClipboard();
 
@@ -298,6 +354,11 @@ void FreeClipboardData(ClipboardData* formats)
 	if (NULL == formats || NULL == formats->dataArray)
 		return;
 
+	// release any copies that were not handed over to the clipboard
+	for (int i = 0; i < formats->count; i++)
+		if (NULL != formats->dataArray[i].dataHandle)
+			GlobalFree(formats->dataArray[i].dataHandle);
+
 	free(formats->dataArray);
 	formats->dataArray = NULL;
 	formats->count = 0;
@@ -310,24 +371,38 @@ void FreeClipboardData(ClipboardData* formats)
 WCHAR* GetClipboardText()
 {
 	WCHAR* text = NULL;
-	if (OpenClipboardWithRetry()) {
-		HANDLE handle = GetClipboardData(CF_UNICODETEXT);
-		WCHAR* clipboardText = (WCHAR*)GlobalLock(handle);
-		if (!clipboardText) {
-			CloseClipboard();
-			return NULL;
-		}
+	if (!OpenClipboardWithRetry())
+		return NULL;
 
-		size_t size = sizeof(WCHAR) * (wcslen(clipboardText)+1);
-		text = (WCHAR*)malloc(size);
-		if (!text) {
-			CloseClipboard();
-			return NULL;
-		}
-
-		memcpy(text, clipboardText, size);
+	HANDLE handle = GetClipboardData(CF_UNICODETEXT);
+	if (NULL == handle) {
 		CloseClipboard();
+		return NULL;
 	}
+
+	const WCHAR* clipboardText = (const WCHAR*)GlobalLock(handle);
+	if (NULL == clipboardText) {
+		CloseClipboard();
+		return NULL;
+	}
+
+	// do not trust the data to be null-terminated: bound the scan by its size
+	SIZE_T bytes = GlobalSize(handle);
+	size_t maxChars = bytes / sizeof(WCHAR);
+	size_t length = 0;
+	while (length < maxChars && L'\0' != clipboardText[length])
+		length++;
+
+	text = (WCHAR*)malloc(sizeof(WCHAR) * (length + 1));
+	if (NULL != text) {
+		if (length > 0)
+			memcpy(text, clipboardText, sizeof(WCHAR) * length);
+		text[length] = L'\0';
+	}
+
+	GlobalUnlock(handle);
+	CloseClipboard();
+
 	return text;
 }
 
@@ -338,22 +413,38 @@ BOOL SetClipboardText(const WCHAR* text)
 {
 	if (NULL == text)
 		return FALSE;
-	if (OpenClipboardWithRetry()) {
-		size_t size = sizeof(WCHAR) * (wcslen(text)+1);
-		HANDLE handle = GlobalAlloc(GHND, size);
-		WCHAR* clipboardText = (WCHAR*)GlobalLock(handle);
 
-		memcpy(clipboardText, text, size);
+	if (!OpenClipboardWithRetry())
+		return FALSE;
 
-		GlobalUnlock(handle);
-		EmptyClipboard();
-		SetClipboardData(CF_UNICODETEXT, handle);
+	size_t size = sizeof(WCHAR) * (wcslen(text) + 1);
+	HANDLE handle = GlobalAlloc(GHND, size);
+	if (NULL == handle) {
 		CloseClipboard();
-
-		return TRUE;
+		return FALSE;
 	}
 
-	return FALSE;
+	WCHAR* clipboardText = (WCHAR*)GlobalLock(handle);
+	if (NULL == clipboardText) {
+		GlobalFree(handle);
+		CloseClipboard();
+		return FALSE;
+	}
+
+	memcpy(clipboardText, text, size);
+
+	GlobalUnlock(handle);
+
+	if (!EmptyClipboard()
+			|| NULL == SetClipboardData(CF_UNICODETEXT, handle)) {
+		GlobalFree(handle);
+		CloseClipboard();
+		return FALSE;
+	}
+
+	CloseClipboard();
+
+	return TRUE;
 }
 
 
