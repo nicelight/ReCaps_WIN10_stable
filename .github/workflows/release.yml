@@ -30,7 +30,6 @@ jobs:
           /t:Rebuild
           /p:Configuration=Release
           /p:Platform=${{ matrix.platform }}
-          /p:PlatformToolset=v143
           /p:PreBuildEventUseInBuild=false
           /m /nologo
 

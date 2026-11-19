@@ -43,6 +43,8 @@ msbuild recaps.2010.vcxproj ^
 ## CI и релизы
 
 `.github/workflows/release.yml` собирает x64, Win32 и ARM64 на каждый push/PR.
+CI не фиксирует `PlatformToolset`: используется toolset по умолчанию установленной
+Visual Studio на раннере, поэтому сборка не зависит от версии VS.
 При пуше тега вида `v*` создаётся GitHub Release с архивами
 `recaps-x64.zip`, `recaps-Win32.zip` и `recaps-ARM64.zip`
 (внутри — `recaps.exe`, `help`, `flags`).
